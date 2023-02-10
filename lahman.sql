@@ -15,15 +15,33 @@ WITH vanderbilt_player AS (SELECT
                            WHERE c.schoolid = 'vandy') 
 SELECT namefirst, 
 	   namelast, 
-	   SUM(salary)::numeric::money AS total_salary, 
-	   COUNT(DISTINCT yearid) AS total_years_played
+	   SUM(salary)::numeric::money AS total_salary  --Need to cast as numeric first
 FROM salaries AS s
 	 INNER JOIN vanderbilt_player
 	 USING(playerid)
 GROUP BY playerid, namefirst, namelast
 ORDER BY total_salary DESC;
 
+WITH earnings AS(
+	SELECT playerid,
+		SUM(salary) as big_league_pay 
+	FROM salaries
+	GROUP BY playerid),
+vandy AS(
+	SELECT DISTINCT(playerid)
+	FROM collegeplaying
+	WHERE schoolid = 'vandy')
+SELECT playerid, p.namelast, p.namefirst, big_league_pay 
+FROM people as p
+INNER JOIN vandy
+USING(playerid)
+LEFT JOIN earnings
+USING(playerid)
+ORDER BY big_league_pay DESC;
 
+
+
+--Ques 2
 -- Using the fielding table, group players into three groups based on their position: label players with position OF as 
 --"Outfield", those with position "SS", "1B", "2B", and "3B" as "Infield", and those with position "P" or "C" as "Battery". 
 --Determine the number of putouts made by each of these three groups in 2016.
@@ -36,10 +54,25 @@ FROM fielding
 WHERE yearid = '2016'
 GROUP BY group_position
 
--- Find the average number of strikeouts per game by decade since 1920. Round the numbers you report to 2 decimal places. Do the same for home runs per game. Do you see any trends? (Hint: For this question, you might find it helpful to look at the generate_series function (https://www.postgresql.org/docs/9.1/functions-srf.html). If you want to see an example of this in action, check out this DataCamp video: https://campus.datacamp.com/courses/exploratory-data-analysis-in-sql/summarizing-and-aggregating-numeric-data?ex=6)
+--Ques 3
+-- Find the average number of strikeouts per game by decade since 1920. Round the numbers you report to 2 decimal places.
+--Do the same for home runs per game. Do you see any trends? 
+--(Hint: For this question, you might find it helpful to look at the generate_series function (https://www.postgresql.org/docs/9.1/functions-srf.html). 
+--If you want to see an example of this in action, check out this DataCamp video: https://campus.datacamp.com/courses/exploratory-data-analysis-in-sql/summarizing-and-aggregating-numeric-data?ex=6)
 
+select DISTINCT yearid
+from batting
+ORDER BY yearid DESC
+
+
+SELECT *
+FROM generate_series(1920,2010,10 )
+
+--Ques 4
 -- Find the player who had the most success stealing bases in 2016, where success is measured as the percentage of stolen base attempts which are successful. (A stolen base attempt results either in a stolen base or being caught stealing.) Consider only players who attempted at least 20 stolen bases. Report the players' names, number of stolen bases, number of attempts, and stolen base percentage.
 
+
+--Ques 5
 -- From 1970 to 2016, what is the largest number of wins for a team that did not win the world series? What is the smallest number of wins for a team that did win the world series? Doing this will probably result in an unusually small number of wins for a world series champion; determine why this is the case. Then redo your query, excluding the problem year. How often from 1970 to 2016 was it the case that a team with the most wins also won the world series? What percentage of the time?
 
 -- Which managers have won the TSN Manager of the Year award in both the National League (NL) and the American League (AL)? Give their full name and the teams that they were managing when they won the award.
