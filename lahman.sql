@@ -90,20 +90,22 @@ GROUP BY generate_series
 ORDER BY generate_series DESC
 
 --Micheal code
-/*
-WITH generate_series AS (SELECT * FROM
-					 generate_series(1920,2016,10 ) AS beginning_of_decade) 
-					 
-SELECT  
-        ROUND(SUM(so)*1.0/SUM(g), 2) AS avg_strikeouts,
-		ROUND(SUM(hr)*1.0/SUM(g), 2) AS avg_homeruns,
-		beginning_of_decade::text || 's' AS decade
+
+/*					
+WITH decade_cte AS (
+	SELECT generate_series(1920, 2020, 10) AS beginning_of_decade
+)
+SELECT 
+	ROUND(SUM(hr) * 1.0 / (SUM(g) / 2), 2) AS hr_per_game,
+	ROUND(SUM(so) * 1.0 / (SUM(g) / 2), 2) AS so_per_game,
+	beginning_of_decade::text || 's' AS decade
 FROM teams
-INNER JOIN generate_series
-ON yearid BETWEEN beginning_of_decade AND beginning_of_decade+9 
+INNER JOIN decade_cte
+ON yearid BETWEEN beginning_of_decade AND beginning_of_decade + 9
 WHERE yearid >= 1920
 GROUP BY decade
-ORDER BY decade DESC
+ORDER BY decade;
+
 */
 
 --Smita code
@@ -143,23 +145,65 @@ ORDER BY generate_series DESC
 
 
 WITH success AS (SELECT DISTINCT playerid, 
-				        SUM(sb) AS number_stolen,
-				        SUM(cs) AS number_caught,
-				        SUM(sb) + SUM(cs) AS number_attempt,
+				        SUM(sb) AS stolen_bases,
+				        SUM(cs) AS caught_stealing,
+				        SUM(sb) + SUM(cs) AS attempts,
 				        ROUND(SUM(sb)* 100/ (SUM(sb) + SUM(cs)), 2) AS success_percentage
                   FROM batting 
                   WHERE yearid = '2016' 
                   GROUP BY playerid
-				  HAVING SUM(sb) >= 20)
+				  HAVING SUM(sb) + SUM(cs)  >= 20)
 SELECT namefirst, 
        namelast, 
-	   number_stolen, 
-	   number_attempt, 
+	   stolen_bases, 
+	   attempts, 
 	   success_percentage
 FROM people AS p
 INNER JOIN success
 USING (playerid)
 ORDER BY success_percentage DESC;
+
+--Micheal code
+/*
+WITH full_batting AS (
+	SELECT
+		playerid,
+		SUM(sb) AS sb,
+		SUM(cs) AS cs,
+		SUM(sb) + SUM(cs) AS attempts
+	FROM batting
+	WHERE yearid = 2016
+	GROUP BY playerid
+)
+SELECT
+	namefirst || ' ' || namelast AS fullname,
+	sb,
+	attempts,
+	ROUND(sb*1.0 / attempts, 2) AS sb_percentage
+FROM full_batting
+INNER JOIN people
+USING(playerid)
+WHERE attempts >= 20
+ORDER BY sb_percentage DESC;
+*/
+
+--Alison Code
+/*
+SELECT success.nameFirst, 
+       success.nameLast, 
+	   CAST(CAST(Success.stolen_bases AS DECIMAL(5, 2)) / success.total_attempts * 100 AS DECIMAL(5, 2)) AS success_stealing 
+FROM(SELECT nameFirst,
+            nameLast, SUM(sb) AS stolen_bases, 
+			SUM(sb + cs) AS total_attempts
+ FROM people
+ INNER JOIN batting AS B
+ USING(playerid)
+ WHERE sb >= 20 
+ AND yearid = 2016
+ GROUP BY nameFirst, nameLast) AS success
+ORDER BY success_stealing DESC
+LIMIT 1;
+*/
 
 
 --Ques 5
