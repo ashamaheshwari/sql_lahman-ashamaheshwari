@@ -77,9 +77,8 @@ GROUP BY group_position;
 --If you want to see an example of this in action, check out this DataCamp video: https://campus.datacamp.com/courses/exploratory-data-analysis-in-sql/summarizing-and-aggregating-numeric-data?ex=6)
 
 
-WITH generate_series AS (SELECT * FROM
-					 generate_series(1920,2010,10 ))
-					 
+WITH generate_series AS (SELECT * 
+						 FROM generate_series(1920,2016,10 ))		 
 SELECT  generate_series, 
         ROUND(SUM(so)*1.0/SUM(g), 2) AS avg_strikeouts,
 		ROUND(SUM(hr)*1.0/SUM(g), 2) AS avg_homeruns
@@ -89,7 +88,43 @@ ON generate_series+1 <= yearid AND generate_series+10 >= yearid
 WHERE yearid >= 1920
 GROUP BY generate_series
 ORDER BY generate_series DESC
-	
+
+--Micheal code
+/*
+WITH generate_series AS (SELECT * FROM
+					 generate_series(1920,2016,10 ) AS beginning_of_decade) 
+					 
+SELECT  
+        ROUND(SUM(so)*1.0/SUM(g), 2) AS avg_strikeouts,
+		ROUND(SUM(hr)*1.0/SUM(g), 2) AS avg_homeruns,
+		beginning_of_decade::text || 's' AS decade
+FROM teams
+INNER JOIN generate_series
+ON yearid BETWEEN beginning_of_decade AND beginning_of_decade+9 
+WHERE yearid >= 1920
+GROUP BY decade
+ORDER BY decade DESC
+*/
+
+--Smita code
+/*
+WITH decade AS (SELECT 
+generate_series (1920, 2016, 10) AS decade_group)
+	SELECT decade_group,
+	COALESCE(ROUND (SUM(g), 2), 0) as sum_game,
+	COALESCE(ROUND (SUM(so), 2), 0) as sum_strikeout,
+	COALESCE(ROUND (SUM(hr), 2), 0) as sum_homerun,
+	COALESCE(ROUND (SUM(so)*1.0/SUM(g), 2), 0) as AvgSO_game,
+	COALESCE(ROUND (SUM(hr)*1.0/SUM(g), 2), 0) as AvgHR_game
+	FROM pitching
+	INNER JOIN decade
+		ON decade_group+1 <= yearid 
+		AND decade_group+10 >= yearid
+		WHERE yearid >= 1920
+		GROUP BY decade_group
+	ORDER BY decade_group ASC;
+*/
+
 -- Number of games	
 WITH generate_series AS (SELECT * FROM
 					 generate_series(1920,2010,10 ))
@@ -107,13 +142,93 @@ ORDER BY generate_series DESC
 --attempts, and stolen base percentage.
 
 
+WITH success AS (SELECT DISTINCT playerid, 
+				        SUM(sb) AS number_stolen,
+				        SUM(cs) AS number_caught,
+				        SUM(sb) + SUM(cs) AS number_attempt,
+				        ROUND(SUM(sb)* 100/ (SUM(sb) + SUM(cs)), 2) AS success_percentage
+                  FROM batting 
+                  WHERE yearid = '2016' 
+                  GROUP BY playerid
+				  HAVING SUM(sb) >= 20)
+SELECT namefirst, 
+       namelast, 
+	   number_stolen, 
+	   number_attempt, 
+	   success_percentage
+FROM people AS p
+INNER JOIN success
+USING (playerid)
+ORDER BY success_percentage DESC;
+
 
 --Ques 5
--- From 1970 to 2016, what is the largest number of wins for a team that did not win the world series? What is the smallest number of wins for a team that did win the world series? Doing this will probably result in an unusually small number of wins for a world series champion; determine why this is the case. Then redo your query, excluding the problem year. How often from 1970 to 2016 was it the case that a team with the most wins also won the world series? What percentage of the time?
+-- From 1970 to 2016, what is the largest number of wins for a team that did not win the world series?
+--What is the smallest number of wins for a team that did win the world series? Doing this will probably 
+--result in an unusually small number of wins for a world series champion; determine why this is the case.
+--Then redo your query, excluding the problem year. How often from 1970 to 2016 was it the case that a
+--team with the most wins also won the world series? What percentage of the time?
 
--- Which managers have won the TSN Manager of the Year award in both the National League (NL) and the American League (AL)? Give their full name and the teams that they were managing when they won the award.
 
--- Which pitcher was the least efficient in 2016 in terms of salary / strikeouts? Only consider pitchers who started at least 10 games (across all teams). Note that pitchers often play for more than one team in a season, so be sure that you are counting all stats for each player.
+SELECT DISTINCT teamid, yearid, SUM(W) AS wins
+FROM teams
+WHERE yearid BETWEEN 1970 AND 2016 AND wswin = 'N'
+GROUP BY teamid, yearid
+ORDER BY wins DESC, yearid;
+
+
+SELECT DISTINCT teamid, yearid, SUM(W) AS world_winner
+FROM teams
+WHERE yearid BETWEEN 1970 AND 2016 AND wswin = 'Y'
+GROUP BY teamid, yearid
+ORDER BY world_winner, yearid;
+
+SELECT DISTINCT teamid, yearid, SUM(W) AS world_winner
+FROM teams
+WHERE yearid BETWEEN 1970 AND 2016 AND wswin = 'Y' AND yearid != 1981
+GROUP BY teamid, yearid
+ORDER BY world_winner, yearid;
+
+
+
+
+
+SELECT teamid, yearid, MAX(wins)
+FROM
+(SELECT DISTINCT teamid, 
+                yearid, 
+	            SUM(W) AS wins,
+                wswin
+				FROM teams
+WHERE yearid BETWEEN 1970 AND 2016 AND yearid != 1981 
+GROUP BY wswin, teamid, yearid) AS wins
+WHERE wswin = 'Y'
+GROUP BY teamid, yearid
+
+--Ques 6
+-- Which managers have won the TSN Manager of the Year award in both the National League (NL) and the 
+--American League (AL)? Give their full name and the teams that they were managing when they won the award.
+
+WITH AL_winner AS (SELECT DISTINCT playerid
+                   FROM awardsmanagers
+                   WHERE awardid = 'TSN Manager of the Year' AND lgid = 'AL'
+				  ),
+NL_winner AS (SELECT DISTINCT playerid
+                   FROM awardsmanagers 
+                   WHERE awardid = 'TSN Manager of the Year' AND lgid = 'NL')
+SELECT DISTINCT p.playerid, teamid, namefirst, namelast
+FROM people as p
+INNER JOIN managers
+USING(playerid)
+INNER JOIN NL_winner
+USING(playerid) 
+INNER JOIN AL_winner
+USING(playerid)
+
+--Ques 7
+-- Which pitcher was the least efficient in 2016 in terms of salary / strikeouts?Only consider pitchers
+--who started at least 10 games (across all teams). Note that pitchers often play for more than one team 
+--in a season, so be sure that you are counting all stats for each player.
 
 -- Find all players who have had at least 3000 career hits. Report those players' names, total number of hits, and the year they were inducted into the hall of fame (If they were not inducted into the hall of fame, put a null in that column.) Note that a player being inducted into the hall of fame is indicated by a 'Y' in the inducted column of the halloffame table.
 
