@@ -39,14 +39,7 @@ LEFT JOIN earnings
 USING(playerid)
 ORDER BY big_league_pay DESC;
 
-SELECT namefirst, 
-	   namelast, 
-	   SUM(salary)::numeric::money AS total_salary, 
-	   COUNT(DISTINCT yearid) AS years_played
-FROM people
-	 INNER JOIN salaries
-	 USING(playerid)
-WHERE playerid IN (
+(
 SELECT 
 	playerid
 	FROM collegeplaying 
@@ -274,12 +267,89 @@ USING(playerid)
 --who started at least 10 games (across all teams). Note that pitchers often play for more than one team 
 --in a season, so be sure that you are counting all stats for each player.
 
--- Find all players who have had at least 3000 career hits. Report those players' names, total number of hits, and the year they were inducted into the hall of fame (If they were not inducted into the hall of fame, put a null in that column.) Note that a player being inducted into the hall of fame is indicated by a 'Y' in the inducted column of the halloffame table.
 
+select *
+FROM salaries
+
+
+WITH pitcher_2016 AS (SELECT DISTINCT playerid, 
+					         SUM(so) AS strikeouts
+                      FROM pitching
+                      WHERE yearid = 2016 AND g >= 10
+                      GROUP BY playerid),
+salary_2016 AS (SELECT DISTINCT playerid, 
+			           SUM(salary)::numeric::money AS total_salary
+				FROM salaries
+			    WHERE yearid = 2016
+			    GROUP BY playerid)
+SELECT DISTINCT p.playerid, 
+       namefirst, 
+	   namelast,
+      (total_salary/strikeouts)::numeric::money AS salary_per_so 
+FROM people as p
+INNER JOIN pitcher_2016
+USING(playerid)
+INNER JOIN salary_2016
+USING(playerid)
+GROUP BY namefirst, namelast, playerid, salary_per_so
+ORDER BY salary_per_so;
+
+
+
+
+
+--Ques 8
+-- Find all players who have had at least 3000 career hits. Report those players' names, total number of
+--hits, and the year they were inducted into the hall of fame (If they were not inducted into the hall of
+--fame, put a null in that column.) Note that a player being inducted into the hall of fame is indicated by
+--a 'Y' in the inducted column of the halloffame table.
+
+select * from halloffame
+
+WITH hits AS (SELECT playerid, 
+                     SUM(h) as total_hits
+              FROM batting
+              GROUP BY playerid
+              HAVING SUM(h) >= 3000),
+Fame AS (SELECT playerid,
+		        yearid
+		FROM halloffame
+		WHERE inducted = 'Y')
+SELECT p.playerid, 
+       namefirst, 
+	   namelast,
+	   total_hits,
+       yearid
+FROM people as p
+INNER JOIN hits
+USING(playerid)
+LEFT JOIN halloffame
+USING(playerid)
+
+
+
+--Ques 9
 -- Find all players who had at least 1,000 hits for two different teams. Report those players' full names.
+SELECT namefirst,
+	   namelast,
+	   SUM(h)as hits
+FROM batting
+INNER JOIN people
+USING(playerid)
+GROUP BY namefirst, namelast
+HAVING SUM(h) >= 1000 AND COUNT(DISTINCT teamid) = 2;
 
--- Find all players who hit their career highest number of home runs in 2016. Consider only players who have played in the league for at least 10 years, and who hit at least one home run in 2016. Report the players' first and last names and the number of home runs they hit in 2016.
 
+-- Find all players who hit their career highest number of home runs in 2016. Consider only players who
+--have played in the league for at least 10 years, and who hit at least one home run in 2016.
+--Report the players' first and last names and the number of home runs they hit in 2016.
+select *
+from batting
+
+
+select playerid
+       
+FROM batting
 -- After finishing the above questions, here are some open-ended questions to consider.
 
 -- Open-ended questions
