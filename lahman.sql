@@ -242,6 +242,55 @@ GROUP BY wswin, teamid, yearid) AS wins
 WHERE wswin = 'Y'
 GROUP BY teamid, yearid
 
+/*
+SELECT *
+FROM (SELECT franchid AS franchise, yearid AS year,
+ CASE WHEN WSWin = 'Y' THEN 1 ELSE 0 END AS total_ws_wins,
+ W AS total_regular_wins
+FROM teams
+WHERE yearid BETWEEN 1970 AND 2016
+ORDER BY franchid) AS franch
+WHERE total_ws_wins = 0
+ORDER BY total_regular_wins DESC
+LIMIT 1;
+*/
+
+-- Micheal code
+/*
+WITH top_wins AS (
+	SELECT yearid, MAX(w) AS w
+	FROM teams
+	WHERE yearid between 1970 AND 2016
+	GROUP BY yearid
+),
+top_wins_teams AS (
+	SELECT teamid, yearid, w, wswin
+	FROM teams
+	INNER JOIN top_wins
+	USING(yearid, w)
+)
+SELECT
+	SUM(CASE WHEN wswin = 'Y' THEN 1 ELSE 0 END),
+	AVG(CASE WHEN wswin = 'Y' THEN 1 ELSE 0 END)
+FROM top_wins_teams
+WHERE yearid <> 1981 AND wswin IS NOT NULL;
+
+*/
+
+--Hayden code
+/*
+WITH max_win AS(
+	SELECT *,
+		RANK() OVER(PARTITION BY yearid ORDER BY w DESC) as ranks
+	FROM teams
+	WHERE yearid BETWEEN 1970 AND 2019
+)
+SELECT COUNT(*), ROUND(100 * COUNT(*) / (2016 - 1970 + 1)::decimal, 2) AS percent
+FROM max_win
+WHERE ranks = '1' AND
+	wswin = 'Y'
+*/
+
 --Ques 6
 -- Which managers have won the TSN Manager of the Year award in both the National League (NL) and the 
 --American League (AL)? Give their full name and the teams that they were managing when they won the award.
@@ -262,21 +311,56 @@ USING(playerid)
 INNER JOIN AL_winner
 USING(playerid)
 
+/*
+with both_league_manager AS (SELECT DISTINCT playerid
+                             FROM awardsmanagers
+                             WHERE awardid = 'TSN Manager of the Year' AND lgid IN ('AL', 'NL')
+							 GROUP BY playerid
+							 HAVING COUNT (DISTINCT lgid) = 2),
+both_league_manager_years AS (SELECT DISTINCT playerid, yearid
+                             FROM awardsmanagers
+						     INNER JOIN both_league_manager
+                             USING(playerid)
+							 WHERE awardid = 'TSN Manager of the Year' AND lgid IN ('AL', 'NL')
+							 GROUP BY playerid
+	HAVING COUNT (DISTINCT lgid) = 2),
+*/
+
+/*
+SELECT
+ namefirst || ' ' || namelast AS full_name,
+ awmg.yearid,
+ awmg.lgid,
+ teamid
+FROM awardsmanagers AS awmg
+INNER JOIN people
+USING(playerid)
+INNER JOIN managers AS m
+ON awmg.playerid = m.playerid
+ AND awmg.yearid = m.yearid
+WHERE (awmg.playerid, awmg.awardid) IN (
+ SELECT playerid,
+  awardid
+ FROM awardsmanagers
+ WHERE awardid = 'TSN Manager of the Year'
+  AND lgid IN ('NL','AL')
+ GROUP BY playerid, awardid
+ HAVING COUNT( DISTINCT lgid) = 2
+)							 							 
+*/
+
 --Ques 7
 -- Which pitcher was the least efficient in 2016 in terms of salary / strikeouts?Only consider pitchers
 --who started at least 10 games (across all teams). Note that pitchers often play for more than one team 
 --in a season, so be sure that you are counting all stats for each player.
 
 
-select *
-FROM salaries
-
-
 WITH pitcher_2016 AS (SELECT DISTINCT playerid, 
 					         SUM(so) AS strikeouts
                       FROM pitching
-                      WHERE yearid = 2016 AND g >= 10
-                      GROUP BY playerid),
+                      WHERE yearid = 2016 
+                      GROUP BY playerid
+					  HAVING SUM(gs) >= 10),
 salary_2016 AS (SELECT DISTINCT playerid, 
 			           SUM(salary)::numeric::money AS total_salary
 				FROM salaries
@@ -294,9 +378,35 @@ USING(playerid)
 GROUP BY namefirst, namelast, playerid, salary_per_so
 ORDER BY salary_per_so;
 
+--micheal code 
+/*
+WITH full_pitching AS (
+	SELECT 
+		playerid,
+		SUM(so) AS so
+	FROM pitching
+	WHERE yearid = 2016
+	GROUP BY playerid
+	HAVING SUM(gs) >= 10
+),
+full_salary AS (
+	SELECT
+		playerid,
+		SUM(salary) AS salary
+	FROM salaries
+	WHERE yearid = 2016
+	GROUP BY playerid
+)
+SELECT 
+	namefirst || ' ' || namelast AS fullname,
+	salary::numeric::MONEY / so AS so_efficiency
+FROM full_pitching
+NATURAL JOIN full_salary
+INNER JOIN people
+USING(playerid)
+ORDER BY so_efficiency DESC;
 
-
-
+*/
 
 --Ques 8
 -- Find all players who have had at least 3000 career hits. Report those players' names, total number of
@@ -304,7 +414,6 @@ ORDER BY salary_per_so;
 --fame, put a null in that column.) Note that a player being inducted into the hall of fame is indicated by
 --a 'Y' in the inducted column of the halloffame table.
 
-select * from halloffame
 
 WITH hits AS (SELECT playerid, 
                      SUM(h) as total_hits
@@ -313,53 +422,147 @@ WITH hits AS (SELECT playerid,
               HAVING SUM(h) >= 3000),
 Fame AS (SELECT playerid,
 		        yearid
-		FROM halloffame
-		WHERE inducted = 'Y')
-SELECT p.playerid, 
-       namefirst, 
-	   namelast,
+		 FROM halloffame
+		 WHERE inducted = 'Y')
+SELECT namefirst || ' ' || namelast AS fullname,
 	   total_hits,
        yearid
-FROM people as p
+FROM people 
 INNER JOIN hits
 USING(playerid)
-LEFT JOIN halloffame
+LEFT JOIN fame
 USING(playerid)
 
+Ajay code
 
+/*
+WITH career_hits AS(
+	SELECT DISTINCT playerid, 
+			SUM(h) AS hits 
+	FROM batting
+		GROUP BY playerid
+		HAVING  SUM(h) >= 3000
+		ORDER BY 2 DESC
+)
+SELECT DISTINCT ON (namefirst, namelast) namefirst,
+	   namelast,
+	   ch.hits,	   
+	   CASE WHEN hf.inducted = 'Y' THEN 'Y'
+	   		ELSE NULL END AS hf_inducted,
+	   CASE WHEN hf.inducted = 'Y' THEN hf.yearid 
+	   		END AS hf_yearid	   
+FROM people p
+	INNER JOIN career_hits ch 
+		USING (playerid)
+	LEFT JOIN halloffame hf 
+		USING (playerid)
+ORDER BY namefirst, namelast, hf_yearid desc NULLS LAST
+*/
 
 --Ques 9
 -- Find all players who had at least 1,000 hits for two different teams. Report those players' full names.
-SELECT namefirst,
-	   namelast,
-	   SUM(h)as hits
-FROM batting
-INNER JOIN people
-USING(playerid)
-GROUP BY namefirst, namelast
-HAVING SUM(h) >= 1000 AND COUNT(DISTINCT teamid) = 2;
+
+WITH thousandaires AS (
+	SELECT 
+		playerid,
+		teamid,
+		SUM(h) AS total_hits
+	FROM batting
+	GROUP BY playerid, teamid
+	HAVING SUM(H) >= 1000
+),
+double_thousandaires AS (
+	SELECT
+		playerid
+	FROM thousandaires
+	GROUP BY playerid
+	HAVING COUNT(DISTINCT teamid) = 2)
+SELECT 
+	namefirst || ' ' || namelast AS full_name
+FROM double_thousandaires
+NATURAL JOIN people;
 
 
 -- Find all players who hit their career highest number of home runs in 2016. Consider only players who
 --have played in the league for at least 10 years, and who hit at least one home run in 2016.
 --Report the players' first and last names and the number of home runs they hit in 2016.
-select *
-from batting
+
+WITH player_2016 AS (SELECT playerid,
+                            SUM(hr) AS homeruns_2016
+                     FROM batting
+                     WHERE yearid = 2016
+                     GROUP BY playerid
+                     HAVING SUM(hr) >= 1), --CTE to filter player with atleast one homerun in year 2016
+player_total AS (SELECT playerid,
+                    SUM(hr) AS total_home_runs,
+			        COUNT(DISTINCT yearid) AS year_played
+                    FROM batting
+                    GROUP BY playerid
+                    HAVING COUNT(DISTINCT yearid) >= 10 ),--CTE to filter players played atleast 10 years				 
+player_max AS (SELECT playerid,
+		          MAX(hr) AS max_homerun
+		   FROM batting
+		   GROUP BY playerid
+		  ) --CTE to find max homerun for a player
+
+SELECT namefirst,
+	   namelast,
+	   homeruns_2016
+FROM people
+INNER JOIN player_2016
+USING(playerid)
+INNER JOIN player_total
+USING(playerid)
+INNER JOIN player_max
+USING(playerid)
+WHERE homeruns_2016 = max_homerun
+ORDER BY homeruns_2016 DESC
 
 
-select playerid
-       
-FROM batting
+
 -- After finishing the above questions, here are some open-ended questions to consider.
 
 -- Open-ended questions
 
--- Is there any correlation between number of wins and team salary? Use data from 2000 and later to answer this question. As you do this analysis, keep in mind that salaries across the whole league tend to increase together, so you may want to look on a year-by-year basis.
+
+-- Is there any correlation between number of wins and team salary? Use data from 2000 and later to 
+--answer this question. As you do this analysis, keep in mind that salaries across the whole league tend 
+--to increase together, so you may want to look on a year-by-year basis.
+
+SELECT CORR(total_wins, total_team_salary)
+FROM
+(SELECT DISTINCT teamid, 
+       SUM(W) AS total_wins,
+	   SUM(salary) AS total_team_salary
+FROM teams as t
+INNER JOIN salaries
+USING(teamid)
+WHERE t.yearid = 2000
+GROUP BY teamid) AS sub
 
 -- In this question, you will explore the connection between number of wins and attendance.
 
 -- a. Does there appear to be any correlation between attendance at home games and number of wins?
--- b. Do teams that win the world series see a boost in attendance the following year? What about teams that made the playoffs? Making the playoffs means either being a division winner or a wild card winner.
+
+SELECT CORR(attendance, total_wins)
+FROM
+(SELECT teamid,
+        SUM(w) AS total_wins,
+        attendance
+ FROM teams
+ GROUP BY teamid, attendance
+) AS sub
+
+
+select *
+FROM teams
+
+-- b. Do teams that win the world series see a boost in attendance the following year? What about teams 
+--that made the playoffs? Making the playoffs means either being a division winner or a wild card winner.
+
+SELECT teamid, yearid, attendance
+FROM teams
+WHERE wswin = 'Y'
 
 -- It is thought that since left-handed pitchers are more rare, causing batters to face them less often, that they are more effective. Investigate this claim and present evidence to either support or dispute this claim. First, determine just how rare left-handed pitchers are compared with right-handed pitchers. Are left-handed pitchers more likely to win the Cy Young Award? Are they more likely to make it into the hall of fame?
 
