@@ -1,5 +1,11 @@
 
-## Lahman Baseball Database Exercise
+## Lahman Baseball Database Exercise (PostgreSQL Exercise 3)
+
+This was assignment provided by Instructor Micheal Holloway in NSS Data Science Bootcamp.
+
+Note: in order to not have all the querries run at all times, I commented each one out after I completed it.
+
+
 
 - this data has been made available [online](http://www.seanlahman.com/baseball-archive/statistics/) by Sean Lahman
 - data dictionary is available [here](http://www.seanlahman.com/files/database/readme2016.txt)
